@@ -51,16 +51,12 @@ def to_classification(labels):
     """Convert labels, so they can be used in shape classification."""
     return np.minimum(labels, np.ones(labels.size, dtype=np.int32))
 
-def to_tensor(image):
-    """Convert ndarrays in sample to Tensors."""
-    # swap color axis because
-    # numpy image: H x W x C
-    # torch image: C X H X W
-    image = image.transpose((2, 0, 1))
-    return torch.from_numpy(image)
+def to_monochrome(image):
+    image = torch.mean(image[:-1], axis=0)
+    return image.view(1, *image.size())
 
 def random_rotate(sample):
-    """Random rotate image in sample and update labels."""
+    """Random rotate image and update labels."""
     image, labels = sample
 
     up = 2
@@ -84,7 +80,7 @@ def random_rotate(sample):
     return image, labels
 
 def random_flip(sample):
-    """Flip image in sample and update labels."""
+    """Flip image and update labels."""
     image, labels = sample
 
     up = 2
@@ -119,14 +115,22 @@ class LabelTransform(object):
 
 t = transforms.Compose([
     ImageTransform(transforms.Compose([
-        to_tensor,
+        transforms.ToTensor(),
+        to_monochrome,
+        # convert range of tensors from [0, 1] to [-1, 1]
+        transforms.Normalize((0.5), (0.5)), 
     ])),
     #LabelTransform(to_classification),
     random_flip,
     random_rotate
 ]);
-shapes_dataset = ShapesDataset('./gsn-2021-1.zip', train=True, transform=t)
 
+shapes_dataset = ShapesDataset('./gsn-2021-1.zip', train=True, transform=t)
+img, lab = shapes_dataset[0]
+print(img.size())
+print(img)
+
+'''
 fig = plt.figure()
 
 for i in range(len(shapes_dataset)):
@@ -146,3 +150,4 @@ for i in range(len(shapes_dataset)):
 
 # możee
 # https://jbencook.com/torchvision-transforms/
+'''
