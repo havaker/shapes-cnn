@@ -1,14 +1,18 @@
 import numpy as np
-import random
-from torch.utils.data import DataLoader, Dataset
-from torchvision import datasets
-import zipfile
 import pandas as pd
-import io
+
 import torch
+from torch.utils.data import DataLoader, Dataset
+from torchvision import datasets, transforms
+from torch import nn, optim
+import torch.nn.functional as F
+
 import matplotlib.pyplot as plt
 from skimage.io import imread
-import torchvision.transforms as transforms
+
+import random
+import zipfile
+import io
 
 # https://docs.python.org/3/library/zipfile.html#zipfile-objects
 f = zipfile.ZipFile('./gsn-2021-1.zip')
@@ -36,7 +40,7 @@ class ShapesDataset(Dataset):
             idx = idx.tolist()
 
         img_name = self.labels.iloc[idx]['name']
-        labels = self.labels.iloc[idx][1:].values
+        labels = self.labels.iloc[idx][1:].values.astype(int)
 
         img_path_in_zip = 'data/' + img_name
         img_file = io.BytesIO(self.f.read(img_path_in_zip))
@@ -120,15 +124,87 @@ t = transforms.Compose([
         # convert range of tensors from [0, 1] to [-1, 1]
         transforms.Normalize((0.5), (0.5)), 
     ])),
-    #LabelTransform(to_classification),
-    random_flip,
-    random_rotate
+    LabelTransform(transforms.Compose([
+        to_classification,
+        torch.from_numpy
+    ])),
+    #random_flip,
+    #random_rotate
 ]);
 
-shapes_dataset = ShapesDataset('./gsn-2021-1.zip', train=True, transform=t)
-img, lab = shapes_dataset[0]
-print(img.size())
-print(img)
+trainset = ShapesDataset('./gsn-2021-1.zip', train=True, transform=t)
+testset = ShapesDataset('./gsn-2021-1.zip', train=False, transform=t)
+trainloader = torch.utils.data.DataLoader(
+    trainset,
+    batch_size=128,
+    shuffle=True,
+    num_workers=1
+)
+testloader = torch.utils.data.DataLoader(
+    testset,
+    batch_size=128,
+    shuffle=True,
+    num_workers=1
+)
+
+def total_number_of_weights(model):
+    return sum([val.numel() for key, val in model.state_dict().items()])
+
+class Net(nn.Module):
+    def __init__(self, hidden=6):
+        super(Net, self).__init__()
+        self.fc1 = nn.Linear(28 * 28, hidden)
+        self.fc2 = nn.Linear(hidden, hidden)
+        self.fc3 = nn.Linear(hidden, hidden)
+        self.fc4 = nn.Linear(hidden, hidden)
+        self.fc5 = nn.Linear(hidden, 6)
+        
+    def forward(self, x):
+        x = x.view(x.size(0), -1)
+        x = self.fc1(x)
+        #x = F.relu(self.fc1(x))
+        #x = F.relu(self.fc2(x))
+        #x = F.relu(self.fc3(x))
+        #x = F.relu(self.fc4(x))
+        #x = self.fc5(x)
+        x = F.sigmoid(x)
+        return x
+
+model = Net()
+
+print(type(trainset[0][0]))
+print(trainset[0])
+print('total number of weights =', total_number_of_weights(model))
+
+
+def nll_loss_sum(outputs, labels):
+    loss = 0
+    for i in range(6):
+        loss += F.nll_loss(outputs, labels.T[i])
+        print('nll loss', i, ' loss', loss)
+    return loss
+
+criterion = nn.BCELoss(reduction='sum')
+optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
+
+def train_and_evaluate(model, criterion, optimizer, epochs_count=10):
+    model.train()
+    for epoch in range(epochs_count):
+        for images, labels in trainloader:
+            optimizer.zero_grad()
+            outputs = model(images)
+            print("out", outputs[0])
+            print("labels", labels[0])
+            loss = criterion(outputs, labels.float())
+            print("loss", loss)
+            print()
+            print()
+
+            loss.backward()
+            optimizer.step()
+    return model
+
+train_and_evaluate(model, criterion, optimizer)
 
 '''
 fig = plt.figure()
