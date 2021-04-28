@@ -24,6 +24,7 @@ print(labels_df.head())
 # https://pytorch.org/tutorials/beginner/data_loading_tutorial.html
 class ShapesDataset(Dataset):
     def __init__(self, path, train=True, transform=None):
+        self.path = path
         self.f = zipfile.ZipFile(path)
         labels_csv = io.BytesIO(f.read('data/labels.csv'))
         if train:
@@ -42,9 +43,11 @@ class ShapesDataset(Dataset):
         img_name = self.labels.iloc[idx]['name']
         labels = self.labels.iloc[idx][1:].values.astype(int)
 
+        #f = zipfile.ZipFile(self.path)
         img_path_in_zip = 'data/' + img_name
-        img_file = io.BytesIO(self.f.read(img_path_in_zip))
-        image = imread(img_file)
+        #img_file = io.BytesIO(f.read(img_path_in_zip))
+        #img_file = io.BytesIO(self.f.read(img_path_in_zip))
+        image = imread(img_path_in_zip)
 
         sample = (image, labels)
         if self.transform:
@@ -136,9 +139,9 @@ trainset = ShapesDataset('./gsn-2021-1.zip', train=True, transform=t)
 testset = ShapesDataset('./gsn-2021-1.zip', train=False, transform=t)
 trainloader = torch.utils.data.DataLoader(
     trainset,
-    batch_size=128,
+    batch_size=512,
     shuffle=True,
-    num_workers=1
+    num_workers=8
 )
 testloader = torch.utils.data.DataLoader(
     testset,
@@ -157,7 +160,6 @@ class Net(nn.Module):
                                out_channels=16,
                                kernel_size=3,
                                padding=1)
-        self.pool = nn.MaxPool2d(2)
         self.conv2 = nn.Conv2d(in_channels=16,
                                out_channels=16,
                                kernel_size=3,
@@ -167,36 +169,70 @@ class Net(nn.Module):
                                kernel_size=3,
                                padding=1)
         self.fc = nn.Linear(16 * 3 * 3, 6)
+        self.pool = nn.MaxPool2d(2)
+        self.dropout = nn.Dropout(p=0.15, inplace=True)
         
     def forward(self, x):
         x = F.relu(self.conv1(x))
         x = self.pool(x)
         x = F.relu(self.conv2(x))
+        x = self.dropout(x)
         x = self.pool(x)
         x = F.relu(self.conv3(x))
         x = self.pool(x)
         x = x.view(-1, 16 * 3 * 3)
+        x = self.dropout(x)
         x = self.fc(x)
         x = torch.sigmoid(x)
         return x
 
-model = Net()
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+model = Net().to(device)
 
 print('total number of weights =', total_number_of_weights(model))
 
 criterion = nn.BCELoss(reduction='sum')
-optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
+optimizer = optim.SGD(model.parameters(), lr=0.0001, momentum=0.8)
 
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+def accuracy(predicted_labels_batch, correct_labels_batch):
+    acc = torch.zeros(len(predicted_labels_batch))
+    for i, (predicted, correct) in enumerate(zip(predicted_labels_batch, correct_labels_batch)):
+        two_highest = torch.sort(predicted).indices[-2:]
+        acc[i] = 1 if torch.sum(correct[two_highest]).item() == 2 else 0
+    return acc
+
+labels = torch.tensor([
+    [1, 0, 0, 1, 0, 0],
+    [0, 0, 0, 1, 0, 1],
+    [1, 0, 0, 0, 1, 0],
+])
+
+outputs = torch.tensor([
+    [0.4651, 0.3718, 0.3038, 0.4126, 0.3841, 0.3121],
+    [0.3531, 0.3782, 0.3303, 0.3557, 0.3582, 0.3502],
+    [0.3747, 0.3893, 0.3436, 0.3081, 0.3894, 0.3314]
+])
+
+print(accuracy(outputs, labels))
+
 
 def train_and_evaluate(model, criterion, optimizer, epochs_count=10):
     model.train()
     for epoch in range(epochs_count):
         total_loss = 0
         for images, labels in trainloader:
+            images = images.to(device)
+            labels = labels.to(device)
+
             optimizer.zero_grad()
+
             outputs = model(images)
             loss = criterion(outputs, labels.float())
+            print('labels =', labels)
+            print('outputs =', outputs)
+            print('loss =', loss.item()/len(images))
+            print('acc =', torch.sum(accuracy(outputs, labels))/len(images))
 
             loss.backward()
             optimizer.step()
@@ -207,14 +243,20 @@ def train_and_evaluate(model, criterion, optimizer, epochs_count=10):
 
     return model
 
-train_and_evaluate(model, criterion, optimizer)
+train_and_evaluate(model, criterion, optimizer, 100)
 
 ex_img, ex_label = trainset[0]
-predicted_label = model(ex_img.view(1, *ex_img.size()))
+predicted_label = model(ex_img.view(1, *ex_img.size()).to(device))
 print("true label =", ex_label)
 print("predicted label =", predicted_label)
 
 '''
+print("hej")
+total_loss = 0
+for images, labels in trainloader:
+    total_loss += len(images) + len(labels)
+print("juz po")
+
 fig = plt.figure()
 
 for i in range(len(shapes_dataset)):
