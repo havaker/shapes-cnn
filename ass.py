@@ -168,7 +168,12 @@ class Net(nn.Module):
                                out_channels=16,
                                kernel_size=3,
                                padding=1)
-        self.fc = nn.Linear(16 * 3 * 3, 6)
+        self.conv4 = nn.Conv2d(in_channels=16,
+                               out_channels=16,
+                               kernel_size=3,
+                               padding=1)
+        self.fc = nn.Linear(16 * 3 * 3, 64)
+        self.fc2 = nn.Linear(64, 6)
         self.pool = nn.MaxPool2d(2)
         self.dropout = nn.Dropout(p=0.15, inplace=True)
         
@@ -179,27 +184,33 @@ class Net(nn.Module):
         x = self.dropout(x)
         x = self.pool(x)
         x = F.relu(self.conv3(x))
+        x = F.relu(self.conv4(x))
         x = self.pool(x)
         x = x.view(-1, 16 * 3 * 3)
         x = self.dropout(x)
-        x = self.fc(x)
+        x = F.relu(self.fc(x))
+        x = self.dropout(x)
+        x = self.fc2(x)
         x = torch.sigmoid(x)
         return x
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-model = Net().to(device)
+model = Net()
+model.load_state_dict(torch.load("model-69.torch"))
+modul = model.to(device)
 
 print('total number of weights =', total_number_of_weights(model))
 
 criterion = nn.BCELoss(reduction='sum')
-optimizer = optim.SGD(model.parameters(), lr=0.0001, momentum=0.8)
+#optimizer = optim.SGD(model.parameters(), lr=0.0001, momentum=0.8)
+optimizer = optim.Adam(model.parameters())
 
-def accuracy(predicted_labels_batch, correct_labels_batch):
-    acc = torch.zeros(len(predicted_labels_batch))
+def correctly_predicted_count(predicted_labels_batch, correct_labels_batch):
+    acc = 0
     for i, (predicted, correct) in enumerate(zip(predicted_labels_batch, correct_labels_batch)):
         two_highest = torch.sort(predicted).indices[-2:]
-        acc[i] = 1 if torch.sum(correct[two_highest]).item() == 2 else 0
+        acc += 1 if torch.sum(correct[two_highest]).item() == 2 else 0
     return acc
 
 labels = torch.tensor([
@@ -214,8 +225,7 @@ outputs = torch.tensor([
     [0.3747, 0.3893, 0.3436, 0.3081, 0.3894, 0.3314]
 ])
 
-print(accuracy(outputs, labels))
-
+print(correctly_predicted_count(outputs, labels))
 
 def train_and_evaluate(model, criterion, optimizer, epochs_count=10):
     model.train()
@@ -229,10 +239,10 @@ def train_and_evaluate(model, criterion, optimizer, epochs_count=10):
 
             outputs = model(images)
             loss = criterion(outputs, labels.float())
-            print('labels =', labels)
-            print('outputs =', outputs)
-            print('loss =', loss.item()/len(images))
-            print('acc =', torch.sum(accuracy(outputs, labels))/len(images))
+            #print('labels =', labels)
+            #print('outputs =', outputs)
+            #print('loss =', loss.item()/len(images))
+            #print('acc =', torch.sum(accuracy(outputs, labels))/len(images))
 
             loss.backward()
             optimizer.step()
@@ -243,9 +253,60 @@ def train_and_evaluate(model, criterion, optimizer, epochs_count=10):
 
     return model
 
-train_and_evaluate(model, criterion, optimizer, 100)
+def train(model, criterion, optimizer, train_loader):
+    loss_sum = 0
+    samples_count = 0
 
-ex_img, ex_label = trainset[0]
+    model.train()
+    for batch_idx, (data, target) in enumerate(train_loader):
+        data, target = data.to(device), target.to(device)
+        optimizer.zero_grad()
+        output = model(data)
+
+        loss = criterion(output, target.float())
+        loss.backward()
+        optimizer.step()
+
+        loss_sum += loss.item()
+
+    return loss_sum / len(train_loader.dataset)
+
+
+def test(model, criterion, test_loader, correct):
+    model.eval()
+    test_loss = 0
+    correct_count = 0
+    with torch.no_grad():
+        for data, target in test_loader:
+            data, target = data.to(device), target.to(device)
+            output = model(data)
+
+            test_loss += criterion(output, target.float()).item()  # sum up batch loss
+            correct_count += correct(output, target)
+
+
+    avg_loss = test_loss / len(test_loader.dataset)
+    avg_correct = correct_count / len(test_loader.dataset)
+
+    print('Test set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)'.format(
+        avg_loss, correct_count, len(test_loader.dataset), 100. * avg_correct))
+
+
+#train_and_evaluate(model, criterion, optimizer, 100)
+
+for i in range(0):
+    avg_loss = train(model, criterion, optimizer, trainloader)
+    print("Train set: Average loss: {:.4f}".format(avg_loss))
+    test(model, criterion, testloader, correctly_predicted_count)
+
+
+#print("saving model")
+#torch.save(model.state_dict(), 'model-69.torch')
+#print("saved")
+test(model, criterion, testloader, correctly_predicted_count)
+
+model.eval()
+ex_img, ex_label = testset[1]
 predicted_label = model(ex_img.view(1, *ex_img.size()).to(device))
 print("true label =", ex_label)
 print("predicted label =", predicted_label)
@@ -276,4 +337,13 @@ for i in range(len(shapes_dataset)):
 
 # możee
 # https://jbencook.com/torchvision-transforms/
+
+print("begin")
+#X = []
+#y = []
+#for images, labels in trainloader:
+    #X.extend(images)
+    #y.extend(labels)
+print("end")
+
 '''
