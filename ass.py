@@ -151,60 +151,68 @@ def total_number_of_weights(model):
     return sum([val.numel() for key, val in model.state_dict().items()])
 
 class Net(nn.Module):
-    def __init__(self, hidden=6):
+    def __init__(self):
         super(Net, self).__init__()
-        self.fc1 = nn.Linear(28 * 28, hidden)
-        self.fc2 = nn.Linear(hidden, hidden)
-        self.fc3 = nn.Linear(hidden, hidden)
-        self.fc4 = nn.Linear(hidden, hidden)
-        self.fc5 = nn.Linear(hidden, 6)
+        self.conv1 = nn.Conv2d(in_channels=1,
+                               out_channels=16,
+                               kernel_size=3,
+                               padding=1)
+        self.pool = nn.MaxPool2d(2)
+        self.conv2 = nn.Conv2d(in_channels=16,
+                               out_channels=16,
+                               kernel_size=3,
+                               padding=1)
+        self.conv3 = nn.Conv2d(in_channels=16,
+                               out_channels=16,
+                               kernel_size=3,
+                               padding=1)
+        self.fc = nn.Linear(16 * 3 * 3, 6)
         
     def forward(self, x):
-        x = x.view(x.size(0), -1)
-        x = self.fc1(x)
-        #x = F.relu(self.fc1(x))
-        #x = F.relu(self.fc2(x))
-        #x = F.relu(self.fc3(x))
-        #x = F.relu(self.fc4(x))
-        #x = self.fc5(x)
-        x = F.sigmoid(x)
+        x = F.relu(self.conv1(x))
+        x = self.pool(x)
+        x = F.relu(self.conv2(x))
+        x = self.pool(x)
+        x = F.relu(self.conv3(x))
+        x = self.pool(x)
+        x = x.view(-1, 16 * 3 * 3)
+        x = self.fc(x)
+        x = torch.sigmoid(x)
         return x
 
 model = Net()
 
-print(type(trainset[0][0]))
-print(trainset[0])
 print('total number of weights =', total_number_of_weights(model))
-
-
-def nll_loss_sum(outputs, labels):
-    loss = 0
-    for i in range(6):
-        loss += F.nll_loss(outputs, labels.T[i])
-        print('nll loss', i, ' loss', loss)
-    return loss
 
 criterion = nn.BCELoss(reduction='sum')
 optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
 
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
 def train_and_evaluate(model, criterion, optimizer, epochs_count=10):
     model.train()
     for epoch in range(epochs_count):
+        total_loss = 0
         for images, labels in trainloader:
             optimizer.zero_grad()
             outputs = model(images)
-            print("out", outputs[0])
-            print("labels", labels[0])
             loss = criterion(outputs, labels.float())
-            print("loss", loss)
-            print()
-            print()
 
             loss.backward()
             optimizer.step()
+            total_loss += loss.item()
+
+        avg_loss = total_loss / len(trainset)
+        print('avg loss =', avg_loss)
+
     return model
 
 train_and_evaluate(model, criterion, optimizer)
+
+ex_img, ex_label = trainset[0]
+predicted_label = model(ex_img.view(1, *ex_img.size()))
+print("true label =", ex_label)
+print("predicted label =", predicted_label)
 
 '''
 fig = plt.figure()
