@@ -1,3 +1,5 @@
+import random
+
 import numpy as np
 import pandas as pd
 
@@ -10,20 +12,17 @@ import torch.nn.functional as F
 import matplotlib.pyplot as plt
 from skimage.io import imread
 
-import random
-import zipfile
-import io
 
 class ShapesDataset(Dataset):
     def __init__(self, path, train=True, transform=None):
-        self.path = path
-        self.f = zipfile.ZipFile(path)
-        labels_csv = io.BytesIO(self.f.read('data/labels.csv'))
-        if train:
-            self.labels = pd.read_csv(labels_csv).iloc[:9000]
-        else:
-            self.labels = pd.read_csv(labels_csv).iloc[-1000:]
         self.transform = transform
+        self.path = path
+
+        labels_csv_path = path + "/labels.csv"
+        if train:
+            self.labels = pd.read_csv(labels_csv_path).iloc[:9000]
+        else:
+            self.labels = pd.read_csv(labels_csv_path).iloc[-1000:]
 
     def __len__(self):
         return len(self.labels)
@@ -32,14 +31,11 @@ class ShapesDataset(Dataset):
         if torch.is_tensor(idx):
             idx = idx.tolist()
 
-        img_name = self.labels.iloc[idx]['name']
+        img_name = self.labels.iloc[idx]["name"]
         labels = self.labels.iloc[idx][1:].values.astype(int)
 
-        #f = zipfile.ZipFile(self.path)
-        img_path_in_zip = 'data/' + img_name
-        #img_file = io.BytesIO(f.read(img_path_in_zip))
-        #img_file = io.BytesIO(self.f.read(img_path_in_zip))
-        image = imread(img_path_in_zip)
+        img_path = self.path + "/" + img_name
+        image = imread(img_path)
 
         sample = (image, labels)
         if self.transform:
@@ -111,3 +107,12 @@ class LabelTransform(object):
     def __call__(self, sample):
         image, labels = sample
         return (image, self.transform(labels))
+
+base_transforms = ImageTransform(
+    transforms.Compose([
+        transforms.ToTensor(),
+        to_monochrome,
+        # convert range of tensors from [0, 1] to [-1, 1]
+        transforms.Normalize((0.5), (0.5)), 
+    ])
+)
