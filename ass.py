@@ -33,42 +33,45 @@ def total_number_of_weights(model):
 class Net(nn.Module):
     def __init__(self):
         super(Net, self).__init__()
-        self.conv1 = nn.Conv2d(in_channels=1,
-                               out_channels=16,
-                               kernel_size=3,
-                               padding=1)
-        self.conv2 = nn.Conv2d(in_channels=16,
-                               out_channels=16,
-                               kernel_size=3,
-                               padding=1)
-        self.conv3 = nn.Conv2d(in_channels=16,
-                               out_channels=16,
-                               kernel_size=3,
-                               padding=1)
-        self.conv4 = nn.Conv2d(in_channels=16,
-                               out_channels=16,
-                               kernel_size=3,
-                               padding=1)
-        self.fc = nn.Linear(16 * 3 * 3, 64)
-        self.fc2 = nn.Linear(64, 6)
-        self.pool = nn.MaxPool2d(2)
-        self.dropout = nn.Dropout(p=0.15, inplace=True)
+
+        dropout = 0.2
+
+        self.cnn = nn.Sequential(
+            nn.Conv2d(1, 32, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(inplace=True),
+            nn.BatchNorm2d(32),
+            nn.MaxPool2d(kernel_size=2), # 32x28x28 -> 32x14x14
+
+            nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Dropout(p=dropout),
+            nn.BatchNorm2d(64),
+            nn.MaxPool2d(kernel_size=2), # 64x14x14 -> 64x7x7
+
+            nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Dropout(p=dropout),
+            nn.BatchNorm2d(128),
+            nn.MaxPool2d(kernel_size=2), # 128x7x7 -> 128x3x3
+        )
+
+        self.linear =  nn.Sequential(
+            nn.Linear(128 * 3 * 3, 64),
+            nn.LeakyReLU(inplace=True),
+            nn.Dropout(p=dropout),
+
+            nn.Linear(64, 32),
+            nn.LeakyReLU(inplace=True),
+            nn.Dropout(p=dropout),
+
+            nn.Linear(32, 6),
+            nn.Sigmoid(),
+        )
         
     def forward(self, x):
-        x = F.relu(self.conv1(x))
-        x = self.pool(x)
-        x = F.relu(self.conv2(x))
-        x = self.dropout(x)
-        x = self.pool(x)
-        x = F.relu(self.conv3(x))
-        x = F.relu(self.conv4(x))
-        x = self.pool(x)
-        x = x.view(-1, 16 * 3 * 3)
-        x = self.dropout(x)
-        x = F.relu(self.fc(x))
-        x = self.dropout(x)
-        x = self.fc2(x)
-        x = torch.sigmoid(x)
+        x = self.cnn(x)
+        x = x.view(x.size(0), -1)
+        x = self.linear(x)
         return x
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -106,7 +109,6 @@ class Trainer():
 
         return loss_sum / len(self.train_loader.dataset)
 
-
     def test_epoch(self):
         self.model.eval()
         test_loss = 0
@@ -123,7 +125,11 @@ class Trainer():
         avg_correct = correct_count / len(self.test_loader.dataset)
         return avg_loss, avg_correct
 
-    def train(self, epoch_count):
+    def train(self, epoch_count, early_stop=None):
+        avg_train_losses = []
+        avg_test_losses = []
+        avg_test_accuracies = []
+
         for epoch in range(epoch_count):
             print("Epoch: ", epoch)
 
@@ -135,14 +141,28 @@ class Trainer():
                 avg_test_loss, 100*avg_test_correct
             ))
 
+            avg_train_losses.append(avg_train_loss)
+            avg_test_losses.append(avg_test_loss)
+            avg_test_accuracies.append(avg_test_correct)
+
+            if early_stop and len(avg_train_losses) > early_stop:
+                old_best_loss = min(avg_train_losses[:-early_stop])
+                last_loss = min(avg_train_losses[-early_stop:])
+                if last_loss >= old_best_loss:
+                    print("Early stop")
+                    break
+
+        return avg_train_losses, avg_test_correct, avg_test_accuracies
+
+
 class Classification:
     def __init__(self, net, dataset_path):
         self.net = net
         self.dataset_path = dataset_path
 
         self.criterion = nn.BCELoss(reduction='sum')
-        #optimizer = optim.SGD(model.parameters(), lr=0.0001, momentum=0.8)
-        self.optimizer = optim.Adam(model.parameters())
+        #self.optimizer = optim.SGD(model.parameters(), lr=0.0001, momentum=0.8)
+        self.optimizer = optim.Adam(model.parameters(), lr=1e-3)
 
         self.test_transforms = transforms.Compose([
             base_transforms,
@@ -161,7 +181,6 @@ class Classification:
             two_highest = torch.sort(predicted).indices[-2:]
             acc += 1 if torch.sum(correct[two_highest]).item() == 2 else 0
         return acc
-
 
     def create_trainer(self, batch_size=512, workers_count=4):
         trainset = ShapesDataset(
@@ -192,23 +211,22 @@ class Classification:
             model=self.net,
             criterion=self.criterion,
             correct=Classification.correctly_predicted_count,
-            #correct=None,
             optimizer=self.optimizer,
             train_loader=train_loader,
             test_loader=test_loader,
         )
 
     def train(self, epochs):
-        self.trainer.train(epochs)
+        self.trainer.train(epochs, 10)
 
 
 c = Classification(model, 'gsn-2021-1.zip')
 c.create_trainer()
-c.train(100)
+c.train(300)
 
-#print("saving model")
-#torch.save(model.state_dict(), 'model-69.torch')
-#print("saved")
+print("saving model")
+torch.save(model.state_dict(), 'model-b.torch')
+print("saved")
 #test(model, criterion, testloader, correctly_predicted_count)
 
 '''
