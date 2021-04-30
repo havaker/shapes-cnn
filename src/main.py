@@ -141,17 +141,32 @@ class CountingNet(nn.Module):
             nn.BatchNorm2d(64),
             nn.MaxPool2d(kernel_size=2), # 32ggx28x28 -> 32x14x14
 
+            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Dropout(p=dropout),
+            nn.BatchNorm2d(64),
+
             nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1),
             nn.ReLU(inplace=True),
             nn.Dropout(p=dropout),
             nn.BatchNorm2d(128),
             nn.MaxPool2d(kernel_size=2), # 64x14x14 -> 64x7x7
 
+            nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Dropout(p=dropout),
+            nn.BatchNorm2d(128),
+
             nn.Conv2d(128, 256, kernel_size=3, stride=1, padding=1),
             nn.ReLU(inplace=True),
             nn.Dropout(p=dropout),
             nn.BatchNorm2d(256),
             nn.MaxPool2d(kernel_size=2), # 128x7x7 -> 128x3x3
+
+            nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Dropout(p=dropout),
+            nn.BatchNorm2d(256),
 
             nn.Conv2d(256, 512, kernel_size=3, stride=1, padding=1),
             nn.ReLU(inplace=True),
@@ -168,6 +183,15 @@ class CountingNet(nn.Module):
 
             nn.Linear(256, 128),
             nn.LeakyReLU(inplace=True),
+            nn.BatchNorm1d(128),
+
+            nn.Linear(128, 128),
+            nn.LeakyReLU(inplace=True),
+            nn.BatchNorm1d(128),
+
+            nn.Linear(128, 128),
+            nn.LeakyReLU(inplace=True),
+            nn.BatchNorm1d(128),
 
             nn.Linear(128, 60),
             nn.LeakyReLU(inplace=True),
@@ -179,7 +203,7 @@ class CountingNet(nn.Module):
         x = self.linear(x)
         x = x.view(-1, 6, 10)
         x = F.softmax(x, dim=2)
-        #x = x.view(x.size(0), -1)
+        x = x.view(x.size(0), -1)
         return x
 
 class Counting:
@@ -187,7 +211,8 @@ class Counting:
         self.net = net
         self.dataset_path = dataset_path
 
-        #self.criterion = nn.BCELoss(reduction='sum')
+        #self.criterion = nn.MSELoss(reduction="sum")
+        self.criterion = self.criterion_ultra
         self.optimizer = optim.Adam(self.net.parameters(), lr=1e-3)
 
         self.test_transforms = transforms.Compose([
@@ -200,26 +225,54 @@ class Counting:
             random_rotate
         ])
 
-        self.create_trainer(device, batch_size=128)
+        self.create_trainer(device, batch_size=512)
+        self.a = torch.arange(0, 10).repeat(6, 1).to(device)
 
-    def criterion(self, outputs, targets):
+    def criterion_slow(self, outputs, targets):
         loss = 0
         for i in range(6):
             for j in range(10):
                 for output, target in zip(outputs, targets):
+                    output = output.view(6, 10)
+                    target = target.view(6, 10)
                     correct = torch.argmax(target, axis=1)
                     loss += output[i][j] * (j - correct[i])**2
+        return loss
+
+    def criterion_fast(self, outputs, targets):
+        loss = 0
+        for output, target in zip(outputs, targets):
+            output = output.view(6, 10)
+            target = target.view(6, 10)
+            counts = torch.argmax(target, axis=1)
+            counts = counts.repeat(10, 1).T
+            d = torch.pow(counts - self.a, 2)
+            loss += torch.sum(output * d)
+        return loss
+
+    def criterion_ultra(self, outputs, targets):
+        loss = 0
+        outputs = outputs.view(-1, 6, 10)
+        targets = targets.view(-1, 6, 10)
+        counts = torch.argmax(targets, axis=2)
+        counts = counts.repeat(1, 10).view(outputs.size(0), 10, 6)
+        counts = counts.permute(0, 2, 1)
+        a = self.a.repeat(outputs.size(0), 1, 1)
+        d = torch.pow(counts - a, 2)
+        loss += torch.sum(outputs * d)
         return loss
 
     def encode_count(label):
         n = torch.zeros(6, 10)
         for i, count in enumerate(label):
             n[i][count] = 1
-        return n
+        return n.flatten()
 
     def correctly_predicted_count(predicted_labels_batch, correct_labels_batch):
         acc = 0
         for i, (predicted, correct) in enumerate(zip(predicted_labels_batch, correct_labels_batch)):
+            predicted = predicted.view(6, 10)
+            correct = correct.view(6, 10)
             #print("predicted =", predicted)
             #print("correct =", correct)
             predicted = torch.argmax(predicted, axis=1)
@@ -231,25 +284,25 @@ class Counting:
         return acc
 
     def create_trainer(self, device, batch_size=512, workers_count=4):
-        trainset = ShapesDataset(
+        self.trainset = ShapesDataset(
             self.dataset_path,
             train=True,
             transform=self.train_transforms
         )
-        testset = ShapesDataset(
+        self.testset = ShapesDataset(
             self.dataset_path,
             train=False,
             transform=self.test_transforms
         )
 
         train_loader = torch.utils.data.DataLoader(
-            trainset,
+            self.trainset,
             batch_size=batch_size,
             shuffle=True,
             num_workers=workers_count
         )
         test_loader = torch.utils.data.DataLoader(
-            testset,
+            self.testset,
             batch_size=batch_size,
             shuffle=True,
             num_workers=workers_count
@@ -273,6 +326,7 @@ def main():
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     conet = CountingNet()
+    conet.load_state_dict(torch.load("models/recent.model"))
     conet = conet.to(device)
 
     counting = Counting(conet, "data/extracted/", device)
