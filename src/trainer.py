@@ -1,4 +1,6 @@
 import torch
+import numpy as np
+import matplotlib.pyplot as plt
 
 class Trainer():
     def __init__(
@@ -21,7 +23,7 @@ class Trainer():
 
     def train_epoch(self):
         loss_sum = 0
-        samples_count = 0
+        correct_count = 0
 
         self.model.train()
         for batch_idx, (data, target) in enumerate(self.train_loader):
@@ -33,9 +35,12 @@ class Trainer():
             loss.backward()
             self.optimizer.step()
 
+            correct_count += self.correct(output, target)
             loss_sum += loss.item()
 
-        return loss_sum / len(self.train_loader.dataset)
+        avg_loss = loss_sum / len(self.train_loader.dataset)
+        avg_correct = correct_count / len(self.train_loader.dataset)
+        return avg_loss, avg_correct
 
     def test_epoch(self):
         self.model.eval()
@@ -54,17 +59,20 @@ class Trainer():
         return avg_loss, avg_correct
 
     def train(self, epoch_count, early_stop=None, verbose=True):
-        avg_train_losses = []
-        avg_test_losses = []
-        avg_test_accuracies = []
+        self.avg_train_losses = []
+        self.avg_test_losses = []
+        self.avg_train_accuracies = []
+        self.avg_test_accuracies = []
 
         for epoch in range(epoch_count):
             if verbose:
                 print("Epoch: ", epoch)
 
-            avg_train_loss = self.train_epoch()
+            avg_train_loss, avg_train_correct = self.train_epoch()
             if verbose:
-                print("    Train set: Average loss: {:.4f}".format(avg_train_loss))
+                print('    Train set: Average loss: {:.4f}, Accuracy: ({:.0f}%)'.format( 
+                    avg_train_loss, 100*avg_train_correct
+                ))
 
             avg_test_loss, avg_test_correct = self.test_epoch()
             if verbose:
@@ -72,17 +80,31 @@ class Trainer():
                     avg_test_loss, 100*avg_test_correct
                 ))
 
-            avg_train_losses.append(avg_train_loss)
-            avg_test_losses.append(avg_test_loss)
-            avg_test_accuracies.append(avg_test_correct)
+            self.avg_train_losses.append(avg_train_loss)
+            self.avg_test_losses.append(avg_test_loss)
+            self.avg_test_accuracies.append(avg_test_correct)
+            self.avg_train_accuracies.append(avg_train_correct)
 
-            if early_stop and len(avg_train_losses) > early_stop:
-                old_best_loss = min(avg_train_losses[:-early_stop])
-                last_loss = min(avg_train_losses[-early_stop:])
+            if early_stop and len(self.avg_train_losses) > early_stop:
+                old_best_loss = min(self.avg_train_losses[:-early_stop])
+                last_loss = min(self.avg_train_losses[-early_stop:])
                 if last_loss >= old_best_loss:
                     if verbose:
                         print("Early stop")
                     break
 
-        return avg_train_losses, avg_test_correct, avg_test_accuracies
+        return self.avg_train_losses, self.avg_train_accuracies, \
+            self.avg_test_losses, self.avg_test_accuracies
 
+    def plot(self):
+        """Plot the training history of the classification model."""
+        fig, ax = plt.subplots(1,2, figsize=(20,6), sharex=True)
+        x = np.arange(len(self.avg_train_losses))
+
+        ax[0].plot(x, self.avg_train_losses,'b', marker='.', label="average train loss")
+        ax[0].plot(x, self.avg_test_losses,'r', marker='.', label="average test loss")
+        ax[0].legend()
+
+        ax[1].plot(x, self.avg_train_accuracies,'b', marker='.', label="average train accuracy")
+        ax[1].plot(x, self.avg_test_accuracies,'r', marker='.', label="average test accuracy")
+        ax[1].legend()

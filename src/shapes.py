@@ -116,3 +116,14 @@ base_transforms = ImageTransform(
         transforms.Normalize((0.5), (0.5)), 
     ])
 )
+
+label_names = ["squares", "circles", "up", "right", "down", "left"]
+
+def describe_labels(labels):
+    two_highest = torch.sort(torch.from_numpy(labels)).indices[-2:]
+    s = ""
+    for i in range(2):
+        name = label_names[two_highest[i]]
+        count = labels[two_highest[i]]
+        s += name + "(" + str(count) + ") "
+    return s
