@@ -23,19 +23,19 @@ class ClassificationNet(nn.Module):
             nn.Conv2d(1, 32, kernel_size=3, stride=1, padding=1),
             nn.ReLU(inplace=True),
             nn.BatchNorm2d(32),
-            nn.MaxPool2d(kernel_size=2), # 32x28x28 -> 32x14x14
+            nn.MaxPool2d(2), # 32x28x28 -> 32x14x14
 
             nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),
             nn.ReLU(inplace=True),
             nn.Dropout(p=dropout),
             nn.BatchNorm2d(64),
-            nn.MaxPool2d(kernel_size=2), # 64x14x14 -> 64x7x7
+            nn.MaxPool2d(2), # 64x14x14 -> 64x7x7
 
             nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1),
             nn.ReLU(inplace=True),
             nn.Dropout(p=dropout),
             nn.BatchNorm2d(128),
-            nn.MaxPool2d(kernel_size=2), # 128x7x7 -> 128x3x3
+            nn.MaxPool2d(3, padding=1), # 128x7x7 -> 128x3x3
         )
 
         self.linear =  nn.Sequential(
