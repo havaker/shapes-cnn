@@ -1,3 +1,5 @@
 Before runnning any notebooks or *.py files, data/extracted must be filled
 with *.png files and labels.csv. It can be accomplished by running
 `bash scripts/extract.sh`.
+
+Reports can be found in notebooks/ directory.
