@@ -18,6 +18,7 @@ class ShapesDataset(Dataset):
         self.transform = transform
         self.path = path
 
+        # TODO .join instead of +
         labels_csv_path = path + "/labels.csv"
         if train:
             self.labels = pd.read_csv(labels_csv_path).iloc[:9000]

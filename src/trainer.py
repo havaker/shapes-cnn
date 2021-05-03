@@ -108,3 +108,4 @@ class Trainer():
         ax[1].plot(x, self.avg_train_accuracies,'b', marker='.', label="average train accuracy")
         ax[1].plot(x, self.avg_test_accuracies,'r', marker='.', label="average test accuracy")
         ax[1].legend()
+        plt.show()

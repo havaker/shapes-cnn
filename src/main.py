@@ -10,6 +10,15 @@ def main():
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     #device = torch.device( "cpu")
 
+    conet = CountingNet()
+    conet = conet.to(device)
+
+    counting = Counting(conet, "data/extracted/", device)
+    counting.train(300)
+    counting.trainer.plot()
+    torch.save(conet.state_dict(), "models/recent.model")
+    return
+
     clnet = ClassificationNet()
     clnet.load_state_dict(torch.load("models/classification.model"))
     clnet = clnet.to(device)
