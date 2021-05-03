@@ -64,34 +64,37 @@ class Trainer():
         self.avg_train_accuracies = []
         self.avg_test_accuracies = []
 
-        for epoch in range(epoch_count):
-            if verbose:
-                print("Epoch: ", epoch)
+        try:
+            for epoch in range(epoch_count):
+                if verbose:
+                    print("Epoch: ", epoch)
 
-            avg_train_loss, avg_train_correct = self.train_epoch()
-            if verbose:
-                print('    Train set: Average loss: {:.4f}, Accuracy: ({:.0f}%)'.format( 
-                    avg_train_loss, 100*avg_train_correct
-                ))
+                avg_train_loss, avg_train_correct = self.train_epoch()
+                if verbose:
+                    print('    Train set: Average loss: {:.4f}, Accuracy: ({:.0f}%)'.format( 
+                        avg_train_loss, 100*avg_train_correct
+                    ))
 
-            avg_test_loss, avg_test_correct = self.test_epoch()
-            if verbose:
-                print('    Test set: Average loss: {:.4f}, Accuracy: ({:.0f}%)'.format( 
-                    avg_test_loss, 100*avg_test_correct
-                ))
+                avg_test_loss, avg_test_correct = self.test_epoch()
+                if verbose:
+                    print('    Test set: Average loss: {:.4f}, Accuracy: ({:.0f}%)'.format( 
+                        avg_test_loss, 100*avg_test_correct
+                    ))
 
-            self.avg_train_losses.append(avg_train_loss)
-            self.avg_test_losses.append(avg_test_loss)
-            self.avg_test_accuracies.append(avg_test_correct)
-            self.avg_train_accuracies.append(avg_train_correct)
+                self.avg_train_losses.append(avg_train_loss)
+                self.avg_test_losses.append(avg_test_loss)
+                self.avg_test_accuracies.append(avg_test_correct)
+                self.avg_train_accuracies.append(avg_train_correct)
 
-            if early_stop and len(self.avg_train_losses) > early_stop:
-                old_best_loss = min(self.avg_train_losses[:-early_stop])
-                last_loss = min(self.avg_train_losses[-early_stop:])
-                if last_loss >= old_best_loss:
-                    if verbose:
-                        print("Early stop")
-                    break
+                if early_stop and len(self.avg_train_losses) > early_stop:
+                    old_best_loss = min(self.avg_train_losses[:-early_stop])
+                    last_loss = min(self.avg_train_losses[-early_stop:])
+                    if last_loss >= old_best_loss:
+                        if verbose:
+                            print("Early stop")
+                        break
+        except KeyboardInterrupt:
+            print(" SIGINT caught, stopping training")
 
         return self.avg_train_losses, self.avg_train_accuracies, \
             self.avg_test_losses, self.avg_test_accuracies
