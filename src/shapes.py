@@ -114,7 +114,7 @@ base_transforms = ImageTransform(
         transforms.ToTensor(),
         to_monochrome,
         # convert range of tensors from [0, 1] to [-1, 1]
-        transforms.Normalize((0.5), (0.5)), 
+        transforms.Normalize((0.5), (0.5)),
     ])
 )
 

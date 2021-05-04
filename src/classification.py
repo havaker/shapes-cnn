@@ -50,7 +50,7 @@ class ClassificationNet(nn.Module):
             nn.Linear(32, 6),
             nn.Sigmoid(),
         )
-        
+
     def forward(self, x):
         x = self.cnn(x)
         x = x.view(x.size(0), -1)
@@ -119,14 +119,14 @@ class Classification:
 
                     predicted_labels = disambiguate_pair(tuple(predicted_labels))
                     true_labels = disambiguate_pair(tuple(true_labels))
-                    
+
                     predicted_labels_index = pairs_to_index[predicted_labels]
                     true_labels_index = pairs_to_index[true_labels]
 
                     pred_y[i] = predicted_labels_index
                     true_y[i] = true_labels_index
                     i += 1
-        
+
         matrix = confusion_matrix(true_y, pred_y)
         return matrix, list(all_pairs_str)
 

@@ -69,14 +69,12 @@ class CountingNet135(nn.Module):
             nn.LeakyReLU(inplace=True),
 
             nn.Linear(256, 15*9),
-            #nn.BatchNorm1d(15*9),
         )
         
     def forward(self, x):
         x = self.cnn(x)
         x = x.view(x.size(0), -1)
         x = self.linear(x)
-        #x = F.softmax(x, dim=1)
         x = x.view(x.size(0), 15, 9)
         return x
 
@@ -116,22 +114,16 @@ class Counting135:
             return self.criterion135to60(outputs, targets)
 
     def criterion135to60(self, outputs, targets):
-        #encoded_label = self.encode_label_to_135(targets[0])
-        outputs = F.softmax(outputs.view(outputs.size(0), -1), dim=1).view(outputs.size(0), 15, 9)
         o60 = Counting135.encode_60_from_135(outputs)
-        #print("targets =", targets)
-        #print("outputs =", outputs)
-        #print("encoded =", encoded_label)
-        #print("o60 =", o60)
         return self.criterion60(o60, targets)
 
 
     def encode_60_from_135(batch):
+        batch = F.softmax(batch.view(batch.size(0), -1), dim=1).view(batch.size(0), 15, 9)
         result = torch.zeros(batch.size(0), 6, 10).to(batch.device)
 
         for batch_number, x in enumerate(batch):
             sum_of_c = torch.zeros(6).to(batch.device)
-            x = x.view(15, 9)
             for i, (c1, c2) in enumerate(combinations(range(6), 2)):
                 for div in range(1, 10):
                     c1_count = div
@@ -169,7 +161,7 @@ class Counting135:
         loss += torch.sum(outputs * diff_sq)
         return loss
 
-    def loss135(self):
+    def compute_loss(self):
         testset, test_loader = self.create_dataset_and_loader(
             batch_size=100,
             workers_count=4,
@@ -186,13 +178,10 @@ class Counting135:
                 output = self.net(data)
 
                 test_loss += self.criterion135to60(output, target.float()).item()  # sum up batch loss
-                #correct_count += 1
-                if correct_count > 2:
-                    break
-                #correct_count += self.correct(output, target)
+                correct_count += self.correctly_predicted_count60(output, target)
 
-        avg_loss = test_loss / len(test_loader.dataset)
         avg_correct = correct_count / len(test_loader.dataset)
+        avg_loss = test_loss / len(test_loader.dataset)
         return avg_loss, avg_correct
 
     def encode_label_to_135(self, label):
@@ -217,6 +206,15 @@ class Counting135:
             else:
                 correct = torch.argmax(self.encode_label_to_135(correct).view(15*9)).item()
             if predicted == correct:
+                acc += 1
+        return acc
+
+    def correctly_predicted_count60(self, outputs, correct_labels_batch):
+        predicted_labels_batch = Counting135.encode_60_from_135(outputs)
+        acc = 0
+        for i, (predicted, correct) in enumerate(zip(predicted_labels_batch, correct_labels_batch)):
+            predicted = torch.argmax(predicted, axis=1)
+            if torch.allclose(predicted.float(), correct.float()):
                 acc += 1
         return acc
 

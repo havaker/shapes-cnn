@@ -67,17 +67,17 @@ class Trainer():
         try:
             for epoch in range(epoch_count):
                 if verbose:
-                    print("Epoch: ", epoch)
+                    print("Epoch:", epoch)
 
                 avg_train_loss, avg_train_correct = self.train_epoch()
                 if verbose:
-                    print('    Train set: Average loss: {:.4f}, Accuracy: ({:.0f}%)'.format( 
+                    print("    Train set: Average loss: {:.4f}, Accuracy: {:.2f}%".format(
                         avg_train_loss, 100*avg_train_correct
                     ))
 
                 avg_test_loss, avg_test_correct = self.test_epoch()
                 if verbose:
-                    print('    Test set: Average loss: {:.4f}, Accuracy: ({:.0f}%)'.format( 
+                    print("    Test set: Average loss: {:.4f}, Accuracy: {:.2f}%".format(
                         avg_test_loss, 100*avg_test_correct
                     ))
 
@@ -104,11 +104,11 @@ class Trainer():
         fig, ax = plt.subplots(1,2, figsize=(20,6), sharex=True)
         x = np.arange(len(self.avg_train_losses))
 
-        ax[0].plot(x, self.avg_train_losses,'b', marker='.', label="average train loss")
-        ax[0].plot(x, self.avg_test_losses,'r', marker='.', label="average test loss")
+        ax[0].plot(x, self.avg_train_losses,"b", marker=".", label="average train loss")
+        ax[0].plot(x, self.avg_test_losses,"r", marker=".", label="average test loss")
         ax[0].legend()
 
-        ax[1].plot(x, self.avg_train_accuracies,'b', marker='.', label="average train accuracy")
-        ax[1].plot(x, self.avg_test_accuracies,'r', marker='.', label="average test accuracy")
+        ax[1].plot(x, self.avg_train_accuracies,"b", marker=".", label="average train accuracy")
+        ax[1].plot(x, self.avg_test_accuracies,"r", marker=".", label="average test accuracy")
         ax[1].legend()
         plt.show()

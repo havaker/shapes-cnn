@@ -71,7 +71,7 @@ class CountingNet(nn.Module):
             nn.Linear(256, 60),
             nn.BatchNorm1d(60),
         )
-        
+
     def forward(self, x):
         x = self.cnn(x)
         x = x.view(x.size(0), -1)
