@@ -3,3 +3,30 @@ with *.png files and labels.csv. It can be accomplished by running
 `bash scripts/extract.sh`.
 
 Reports can be found in notebooks/ directory.
+
+src/shapes.py:
+- dataset implementation
+- data augmentation
+
+src/trainer.py:
+- generic training/testing
+
+src/classification.py
+- classification network definition
+- classification problem class
+
+src/counting.py
+- counting network definition (60 outputs)
+- counting problem class
+
+src/counting135.py
+- counting135 network definition (135 outputs)
+- counting135 problem class
+
+Each problem class defines suitable loss function, optimizer, measures
+accuracy and is responsible for creating trainer instance.
+It also handles things specific to a problem, eg. confusion matrix generation.
+
+src/main.py
+- console interface
+- provides a way to save/load models from a filesystem
