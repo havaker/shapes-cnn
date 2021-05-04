@@ -1,2 +1,8 @@
 scikit-image
+torch
+numpy
+matplotlib
+torchvision
+sklearn
+pandas
 
