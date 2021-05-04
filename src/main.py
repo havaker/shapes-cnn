@@ -3,7 +3,8 @@ import numpy as np
 import random
 import argparse
 
-from counting import CountingNet, Counting, CountingNet135
+from counting import CountingNet, Counting
+from counting135 import CountingNet135, Counting135
 from classification import ClassificationNet, Classification
 
 def total_number_of_weights(model):
@@ -11,13 +12,11 @@ def total_number_of_weights(model):
 
 def main():
     parser = argparse.ArgumentParser(description='Assignment 1')
-    parser.add_argument('--batch-size', type=int, default=256, metavar='N',
-                        help='input batch size for training (default: 256)')
     parser.add_argument('--epochs', type=int, default=10, metavar='N',
                         help='number of epochs to train (default: 10)')
     parser.add_argument('--no-cuda', action='store_true', default=False,
                         help='disables CUDA training')
-    parser.add_argument('--no-train', action='store_true', default=False,
+    parser.add_argument('--skip', action='store_true', default=False,
                         help='disables training')
     parser.add_argument('--seed', type=int, default=1, metavar='S',
                         help='random seed (default: 1)')
@@ -27,10 +26,14 @@ def main():
                         help='plots confusion matrix')
     parser.add_argument('--network', type=str, default="classification", metavar='CLASS',
                         help='classification counting or counting135')
-    parser.add_argument('--load-path', type=str, metavar='PATH',
+    parser.add_argument('--load', type=str, metavar='PATH',
                         help='model file load path')
-    parser.add_argument('--save-path', type=str, metavar='PATH',
+    parser.add_argument('--save', type=str, metavar='PATH',
                         help='model file save path')
+    parser.add_argument('--loss135', action='store_true', default=False,
+                        help='computes counting135 train loss')
+    parser.add_argument('--slow', action='store_true', default=False,
+                        help='train counting135 using slow loss')
 
     args = parser.parse_args()
 
@@ -54,9 +57,9 @@ def main():
 
     print("Total number of weights:", total_number_of_weights(net))
 
-    if args.load_path:
-        print("Loading model from ", args.load_path)
-        net.load_state_dict(torch.load(args.load_path))
+    if args.load:
+        print("Loading model from ", args.load)
+        net.load_state_dict(torch.load(args.load))
 
     net = net.to(device)
 
@@ -65,9 +68,9 @@ def main():
     elif args.network == "counting":
         problem = Counting(net, "data/extracted/", device)
     elif args.network == "counting135":
-        problem = Counting(net, "data/extracted/", device, is135=True)
+        problem = Counting135(net, "data/extracted/", device, fast_loss = not args.slow)
 
-    if not args.no_train:
+    if not args.skip:
         print("Training started")
         problem.train(args.epochs)
         print("Training ended")
@@ -76,14 +79,18 @@ def main():
     else:
         print("Skipping training")
 
+    if args.loss135:
+        print("Calculating test loss")
+        print(problem.loss135())
+
     if args.confusion_matrix:
         print("Generating confusion matrix")
         matrix, labels = problem.confusion_matrix(device)
         problem.plot_confusion_matrix(matrix, labels)
 
-    if args.save_path:
-        print("Saving model to", args.save_path)
-        torch.save(net.state_dict(), args.save_path)
+    if args.save:
+        print("Saving model to", args.save)
+        torch.save(net.state_dict(), args.save)
 
 if __name__ == "__main__":
     main()
